@@ -7,6 +7,28 @@
 #define THREADS 1
 #define RESERVOIR_SIZE 10
 
+// FRAGEN:
+// - Braucht die free list auch ein Pointer mit Version
+
+void thread(struct los* los) {
+    uint8_t own = 0;
+
+    for (;;) {
+        while(!(own = acquire(los, own, RESERVOIR_SIZE)));
+        struct node* skip = get_node(los, own);
+
+        for (;;) {
+            // insert the tuple
+
+            if (--skip->length <= 0) {
+                // insert tuple into reservoir
+
+                // acquire new skip
+            }
+        }
+    }
+}
+
 int main() {
     printf("Threads: %d, Reservoir size: %d\n", THREADS, RESERVOIR_SIZE);
 

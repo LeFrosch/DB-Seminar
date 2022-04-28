@@ -5,7 +5,7 @@
 #include <stdbool.h>
 
 #define NULL_PTR 0
-typedef uint64_t node_ptr;
+typedef uint64_t version_ptr;
 
 // Returns the version of the pointer, bits [0-31]
 #define GET_VERSION(ptr) ((uint32_t) (ptr))
@@ -16,6 +16,6 @@ typedef uint64_t node_ptr;
 // Tries to update the pointer atomicity if the pointer is equal to the old
 // pointer. If the pointer do not match false is returned otherwise the version
 // of the old is increased by one and the index is updated.
-bool update_ptr(node_ptr* ptr, node_ptr old, uint8_t index);
+bool update_ptr(version_ptr* ptr, version_ptr old, uint8_t index);
 
 #endif 
