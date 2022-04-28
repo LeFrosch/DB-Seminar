@@ -5,21 +5,30 @@
 #include "node.h"
 #include "los.h"
 
-#define THREADS 1
+#define THREADS 4
 #define RESERVOIR_SIZE 10
-#define INSERTIONS_PER_THREAD 1000
+#define INSERTIONS_PER_THREAD 10000
 
 // FRAGEN:
 // - Braucht die free list auch ein Pointer mit Version
 
 void* thread_entry(void* los) {
+    pthread_t thread_id = pthread_self();
+
     uint8_t own = 0;
     struct node* skip_node = NULL;
 
     for (size_t i = 0; i < INSERTIONS_PER_THREAD; i++) {
         if (!skip_node) {
-            while (!(own = acquire(los, own, RESERVOIR_SIZE)));
+            uint8_t acquired = NULL_PTR;
+            while (!acquired) {
+                acquired = acquire(los, &own, RESERVOIR_SIZE);
+            }
+
+            own = acquired;
             skip_node = get_node(los, own);
+
+            printf("Thread %lu acquired skip: %d { .index: %d, .length: %lu, .w: %f }\n", thread_id, own, skip_node->index, skip_node->length, skip_node->w_value);
         }
 
         if (--skip_node->length <= 0) {

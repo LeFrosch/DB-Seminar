@@ -1,5 +1,6 @@
 #include <malloc.h>
 #include <assert.h>
+#include <pthread.h>
 
 #include "los.h"
 #include "node.h"
@@ -20,7 +21,7 @@ struct los* create_los(uint8_t threads, uint32_t reservoir_size) {
 
     // Set the successor indices for all nodes in the free list, the skip list
     // contains only one node
-    for (uint8_t i = 2; i < threads; i++) {
+    for (uint8_t i = 2; i < threads + 1; i++) {
         los->nodes[i].successor = i + 1;
     }
 
@@ -34,7 +35,7 @@ void free_los(struct los* los) {
     free(los);
 }
 
-uint8_t acquire(struct los* los, uint8_t own, uint32_t reservoir_size) {
+uint8_t acquire(struct los* los, uint8_t* own, uint32_t reservoir_size) {
     // Copy the skip_list pointer to prevent overwrites by other threads
     version_ptr skip_list = los->skip_list;
     struct node* skip_node = los->nodes + GET_INDEX(skip_list);
@@ -44,36 +45,42 @@ uint8_t acquire(struct los* los, uint8_t own, uint32_t reservoir_size) {
     if (skip_node->successor) {
         // If the skip has successor just use this one
         successor = skip_node->successor;
-        assert(successor);
 
         // But if the threads owns a node it needs to be freed
-        if (own) {
-            struct node* own_node = los->nodes + own;
+        if (*own) {
+            struct node* own_node = los->nodes + *own;
 
             // Copy the pointer to detect writes by other threads
             version_ptr free_list = los->free_list;
             own_node->successor = GET_INDEX(free_list);
 
-            if (!update_ptr(&los->free_list, free_list, own)) {
+            if (!update_ptr(&los->free_list, free_list, *own)) {
                 return NULL_PTR;
             }
+
+            *own = NULL_PTR;
         }
     } else {
         // The skip node has no successor, the thread needs to generate a one if
         // the thread owns a node we can just use this, otherwise a new node
         // needs to be allocated
-        if (own) {
-            successor = own;
+        if (*own) {
+            successor = *own;
         } else {
+            printf("Thread %lu requests from free!\n", pthread_self());
+
             // Copy the pointer to detect writes by other threads
             version_ptr free_list = los->free_list;
             successor = GET_INDEX(free_list);
 
             struct node* successor_node = los->nodes + successor;
-
             if (!update_ptr(&los->free_list, free_list, successor_node->successor)) {
+                printf("Thread %lu fails to request from free!!!\n", pthread_self());
                 return NULL_PTR;
             }
+
+            *own = successor;
+            successor_node->successor = NULL_PTR;
         }
 
         generate_next_skip(skip_node, los->nodes + successor, reservoir_size);
