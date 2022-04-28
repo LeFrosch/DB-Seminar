@@ -1,17 +1,22 @@
-#include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 
-#include "pointer.h"
+#include "node.h"
+#include "los.h"
 
 #define THREADS 1
 #define RESERVOIR_SIZE 10
 
 int main() {
-    node_ptr p = 0;
+    printf("Threads: %d, Reservoir size: %d\n", THREADS, RESERVOIR_SIZE);
 
-    printf("Index: %d, Version: %d\n", GET_INDEX(p), GET_VERSION(p));
+    struct los* los = create_los(THREADS, RESERVOIR_SIZE);
+    if (!los) {
+        fprintf(stderr, "Failed to create los\n");
+        return EXIT_FAILURE;
+    }
 
-    update_ptr(&p, 0, 13);
+    free_los(los);
 
-    printf("Index: %d, Version: %d\n", GET_INDEX(p), GET_VERSION(p));
+    printf("Done\n");
 }

@@ -5,8 +5,8 @@ ODIR=./.obj
 CC=gcc
 CFLAGS=-I$(IDIR) -lm
 
-HED=pointer.h
-OBJ=main.o pointer.o
+HED=pointer.h node.h los.h
+OBJ=main.o node.o pointer.o los.o
 
 _HED=$(patsubst %,$(IDIR)/%,$(HED))
 _OBJ=$(patsubst %,$(ODIR)/%,$(OBJ))
