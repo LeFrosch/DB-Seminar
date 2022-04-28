@@ -1,12 +1,12 @@
-SDIR=src
-IDIR=include
-ODIR=.obj
+SDIR=./src
+IDIR=./include
+ODIR=./.obj
 
 CC=gcc
-CFLAGS=-I$(IDIR)
+CFLAGS=-I$(IDIR) -lm
 
-HED=
-OBJ=main.o
+HED=pointer.h
+OBJ=main.o pointer.o
 
 _HED=$(patsubst %,$(IDIR)/%,$(HED))
 _OBJ=$(patsubst %,$(ODIR)/%,$(OBJ))
@@ -14,8 +14,8 @@ _OBJ=$(patsubst %,$(ODIR)/%,$(OBJ))
 $(ODIR)/%.o: $(SDIR)/%.c $(_HED)
 	$(CC) -c -o $@ $< $(CFLAGS)
 
-main: $(_OBJ)
-	$(CC) -o $@ $^ $(CFLAGS)
+all: $(_OBJ)
+	$(CC) -o main $^ $(CFLAGS)
 
 clean:
 	rm -f $(ODIR)/*.o
