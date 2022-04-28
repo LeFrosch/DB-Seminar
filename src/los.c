@@ -15,8 +15,8 @@ struct los* create_los(uint8_t threads, uint32_t reservoir_size) {
 
     // Initially all nodes except one are in the free list, therefore the free
     // list starts at index 2 and the skip list at index 1
-    los->free_list = 2;
-    los->skip_list = 1;
+    los->free_list = 2l << 32;
+    los->skip_list = 1l << 32;
 
     // Set the successor indices for all nodes in the free list, the skip list
     // contains only one node
@@ -44,6 +44,7 @@ uint8_t acquire(struct los* los, uint8_t own, uint32_t reservoir_size) {
     if (skip_node->successor) {
         // If the skip has successor just use this one
         successor = skip_node->successor;
+        assert(successor);
 
         // But if the threads owns a node it needs to be freed
         if (own) {
@@ -67,9 +68,9 @@ uint8_t acquire(struct los* los, uint8_t own, uint32_t reservoir_size) {
             // Copy the pointer to detect writes by other threads
             version_ptr free_list = los->free_list;
             successor = GET_INDEX(free_list);
+
             struct node* successor_node = los->nodes + successor;
 
-            assert(successor_node->successor);
             if (!update_ptr(&los->free_list, free_list, successor_node->successor)) {
                 return NULL_PTR;
             }
