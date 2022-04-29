@@ -7,8 +7,6 @@
 float random_float() { return rand() / ((float) RAND_MAX); }
 
 void generate_initial_skip(struct node* node, uint32_t reservoir_size) {
-    srand(42);
-
     float w = expf(logf(random_float())) / reservoir_size;
 
     node->w_value = w;

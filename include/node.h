@@ -16,7 +16,7 @@ struct node {
     uint8_t successor;
 };
 
-// Generate the initial skip and initializes the random number generator
+// Generate the initial skip
 void generate_initial_skip(struct node* node, uint32_t reservoir_size);
 
 // Generates the next skip depending on the preceding skip

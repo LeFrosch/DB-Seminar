@@ -5,7 +5,7 @@
 #include "los.h"
 #include "node.h"
 
-struct los* create_los(uint8_t threads, uint32_t reservoir_size) {
+struct los* create_los(uint8_t threads, size_t reservoir_size) {
     struct los* los = (struct los*) malloc(sizeof(struct los));
     if (!los) return NULL;
 
@@ -38,7 +38,7 @@ void free_los(struct los* los) {
 // Tries to get or generate the successor for a node from the skip list. If the
 // successor could not be acquired this returns null. But in both cases the own
 // pointer content could be modified.
-uint8_t get_successor(struct  los* los, struct node* node, uint8_t* own, uint32_t reservoir_size) {
+uint8_t get_successor(struct  los* los, struct node* node, uint8_t* own, size_t reservoir_size) {
     if (node->successor) {
         // If the threads owns a node it needs to be freed
         if (*own) {
@@ -87,7 +87,7 @@ uint8_t get_successor(struct  los* los, struct node* node, uint8_t* own, uint32_
 
 // Tries to acquire a node. If no node could be acquired this returns null. In
 // both cases the own pointer could be modified.
-uint8_t try_acquire(struct los* los, uint8_t* own, uint32_t reservoir_size) {
+uint8_t try_acquire(struct los* los, uint8_t* own, size_t reservoir_size) {
     // Copy the pointer to detect writes by other threads
     version_ptr skip_list = los->skip_list;
     struct node* skip_node = los->nodes + GET_INDEX(skip_list);
@@ -104,7 +104,7 @@ uint8_t try_acquire(struct los* los, uint8_t* own, uint32_t reservoir_size) {
     return GET_INDEX(skip_list);
 }
 
-uint8_t acquire(struct los* los, uint8_t own, uint32_t reservoir_size) {
+uint8_t acquire(struct los* los, uint8_t own, size_t reservoir_size) {
     uint8_t result;
     while (!(result = try_acquire(los, &own, reservoir_size)));
 

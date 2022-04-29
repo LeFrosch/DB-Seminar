@@ -16,13 +16,13 @@ struct los {
 };
 
 // Allocates and initializes the list of skips
-struct los* create_los(uint8_t threads, uint32_t reservoir_size);
+struct los* create_los(uint8_t threads, size_t reservoir_size);
 
 // Deallocates the list of skips
 void free_los(struct los* los);
 
 // Acquires a new skip from the los, the own node can be 0/null
-uint8_t acquire(struct los* los, uint8_t own, uint32_t reservoir_size);
+uint8_t acquire(struct los* los, uint8_t own, size_t reservoir_size);
 
 // Retrieves the node from the los, the index should not be 0/null
 struct node* get_node(struct los* los, uint8_t index);
