@@ -20,12 +20,7 @@ void* thread_entry(void* los) {
 
     for (size_t i = 0; i < INSERTIONS_PER_THREAD; i++) {
         if (!skip_node) {
-            uint8_t acquired = NULL_PTR;
-            while (!acquired) {
-                acquired = acquire(los, &own, RESERVOIR_SIZE);
-            }
-
-            own = acquired;
+            own = acquire(los, own, RESERVOIR_SIZE);
             skip_node = get_node(los, own);
 
             printf("Thread %lu acquired skip: %d { .index: %d, .length: %lu, .w: %f }\n", thread_id, own, skip_node->index, skip_node->length, skip_node->w_value);
@@ -37,6 +32,8 @@ void* thread_entry(void* los) {
             skip_node = NULL;
         }
     }
+
+    return NULL;
 }
 
 int main() {
