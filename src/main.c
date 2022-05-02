@@ -20,6 +20,7 @@ struct thread_ctx {
     uint8_t index;
 };
 
+#ifndef NO_SAMPLE
 void* thread_entry(void* arg) {
     struct thread_ctx* ctx = arg;
 
@@ -44,6 +45,20 @@ void* thread_entry(void* arg) {
 
     return NULL;
 }
+
+#else
+
+void* thread_entry(void* arg) {
+    (void) arg;
+
+    for (size_t i = 0; i < INSERTIONS_PER_THREAD; i++) {
+        __asm__ volatile("" : "+g" (i) : :);
+    }
+
+    return NULL;
+}
+
+#endif
 
 void print_reservoir(struct reservoir* reservoir) {
     printf("\nReservoir content:\n");
