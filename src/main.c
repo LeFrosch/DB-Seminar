@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
+#include <math.h>
 
 #include "node.h"
 #include "reservoir.h"
@@ -9,6 +10,7 @@
 #define THREADS 4
 #define RESERVOIR_SIZE 10
 #define INSERTIONS_PER_THREAD 10000000
+#define S_TO_NS 1000000000
 
 // FRAGEN:
 // - Braucht die free list auch ein Pointer mit Version
@@ -19,6 +21,13 @@ struct thread_ctx {
     pthread_t thread_id;
     uint8_t index;
 };
+
+void insertion_placeholder() {
+    for (size_t i = 0; i < 10; i++) {
+        long double result = atan2l(i, i);
+        __asm__ volatile("" : "+g" (result) : :);
+    }
+}
 
 #ifndef NO_SAMPLE
 void* thread_entry(void* arg) {
@@ -41,6 +50,8 @@ void* thread_entry(void* arg) {
 
             skip_node = NULL;
         }
+
+        insertion_placeholder();
     }
 
     return NULL;
@@ -52,7 +63,7 @@ void* thread_entry(void* arg) {
     (void) arg;
 
     for (size_t i = 0; i < INSERTIONS_PER_THREAD; i++) {
-        __asm__ volatile("" : "+g" (i) : :);
+        insertion_placeholder();
     }
 
     return NULL;
@@ -95,6 +106,11 @@ int main() {
         return EXIT_FAILURE;
     }
 
+    printf("Starting threads...\n");
+
+    struct timespec start, finish;
+    clock_gettime(CLOCK_MONOTONIC, &start);
+
     for (size_t i = 0; i < THREADS; i++) {
         struct thread_ctx* ctx = threads + i;
 
@@ -105,13 +121,22 @@ int main() {
         pthread_create(&ctx->thread_id, NULL, thread_entry, ctx);
     }
 
-    printf("Waiting for threads...\n");
-
     for (size_t i = 0; i < THREADS; i++) {
         pthread_join(threads[i].thread_id, NULL);
     }
 
+    clock_gettime(CLOCK_MONOTONIC, &finish);
+
+    long ns =  finish.tv_sec * S_TO_NS + finish.tv_nsec - start.tv_sec * S_TO_NS - start.tv_nsec;
+    long double ms = ns * 1.0e-6L;
+
+    printf("\nMeasurement:\n");
+    printf("\tInsertions: %d\n", INSERTIONS_PER_THREAD *  THREADS);
+    printf("\tDelta: %.0Lfms (%ld ns)\n", roundl(ms), ns);
+
+#ifndef NO_SAMPLE
     print_reservoir(reservoir);
+#endif
 
     free_reservoir(reservoir);
     free_los(los);
