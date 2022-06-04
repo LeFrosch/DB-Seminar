@@ -3,25 +3,24 @@
 #include <pthread.h>
 #include <math.h>
 
+#include "args.h"
 #include "node.h"
 #include "reservoir.h"
 #include "los.h"
 
-#define THREADS 4
-#define RESERVOIR_SIZE 10
-#define INSERTIONS_PER_THREAD 10000000
 #define S_TO_NS 1000000000
 
-// FRAGEN:
-// - Braucht die free list auch ein Pointer mit Version
-
+// Arguments that are used by every thread
 struct thread_ctx {
+    size_t insertions;
+    size_t reservoir_size;
     struct los* los;
     struct reservoir* reservoir;
     pthread_t thread_id;
     uint8_t index;
 };
 
+// Performers some expensive calculations to simulate an expensive insertion
 void insertion_placeholder() {
     for (size_t i = 0; i < 10; i++) {
         long double result = atan2l(i, i);
@@ -36,9 +35,9 @@ void* thread_entry(void* arg) {
     uint8_t own = 0;
     struct node* skip_node = NULL;
 
-    for (size_t i = 0; i < INSERTIONS_PER_THREAD; i++) {
+    for (size_t i = 0; i < ctx->insertions; i++) {
         if (!skip_node) {
-            own = acquire(ctx->los, own, RESERVOIR_SIZE);
+            own = acquire(ctx->los, own, ctx->reservoir_size);
             skip_node = get_node(ctx->los, own);
         }
 
@@ -60,9 +59,9 @@ void* thread_entry(void* arg) {
 #else
 
 void* thread_entry(void* arg) {
-    (void) arg;
+    struct thread_ctx* ctx = arg;
 
-    for (size_t i = 0; i < INSERTIONS_PER_THREAD; i++) {
+    for (size_t i = 0; i <  ctx->insertions; i++) {
         insertion_placeholder();
     }
 
@@ -81,18 +80,19 @@ void print_reservoir(struct reservoir* reservoir) {
     printf("\n");
 }
 
-int main() {
-    printf("Threads: %i, Reservoir size: %i\n", THREADS, RESERVOIR_SIZE);
+int main(int argc, char **argv) {
+    struct args args;
+    parse_args(&args, argc, argv);
 
     srand(42);
 
-    struct reservoir* reservoir = create_reservoir(RESERVOIR_SIZE);
+    struct reservoir* reservoir = create_reservoir(args.reservoir_size);
     if (!reservoir) {
         fprintf(stderr, "Failed to create reservoir\n");
         return EXIT_FAILURE;
     }
 
-    struct los* los = create_los(THREADS, RESERVOIR_SIZE);
+    struct los* los = create_los(args.threads, args.reservoir_size);
     if (!los) {
         fprintf(stderr, "Failed to create los\n");
         return EXIT_FAILURE;
@@ -100,7 +100,7 @@ int main() {
 
     printf("Creating threads...\n");
 
-    struct thread_ctx* threads = (struct thread_ctx*) calloc(THREADS, sizeof(struct thread_ctx));
+    struct thread_ctx* threads = (struct thread_ctx*) calloc(args.threads, sizeof(struct thread_ctx));
     if (!threads) {
         fprintf(stderr, "Failed to allocate thread contexts\n");
         return EXIT_FAILURE;
@@ -111,7 +111,7 @@ int main() {
     struct timespec start, finish;
     clock_gettime(CLOCK_MONOTONIC, &start);
 
-    for (size_t i = 0; i < THREADS; i++) {
+    for (size_t i = 0; i < args.threads; i++) {
         struct thread_ctx* ctx = threads + i;
 
         ctx->index = i;
@@ -121,7 +121,7 @@ int main() {
         pthread_create(&ctx->thread_id, NULL, thread_entry, ctx);
     }
 
-    for (size_t i = 0; i < THREADS; i++) {
+    for (size_t i = 0; i < args.threads; i++) {
         pthread_join(threads[i].thread_id, NULL);
     }
 
@@ -131,7 +131,7 @@ int main() {
     long double ms = ns * 1.0e-6L;
 
     printf("\nMeasurement:\n");
-    printf("\tInsertions: %d\n", INSERTIONS_PER_THREAD *  THREADS);
+    printf("\tInsertions: %zu\n", args.threads * args.insertions);
     printf("\tDelta: %.0Lfms (%ld ns)\n", roundl(ms), ns);
 
 #ifndef NO_SAMPLE

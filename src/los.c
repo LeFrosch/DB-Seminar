@@ -5,7 +5,7 @@
 #include "los.h"
 #include "node.h"
 
-struct los* create_los(uint8_t threads, size_t reservoir_size) {
+struct los* create_los(size_t threads, size_t reservoir_size) {
     struct los* los = (struct los*) malloc(sizeof(struct los));
     if (!los) return NULL;
 
@@ -21,7 +21,7 @@ struct los* create_los(uint8_t threads, size_t reservoir_size) {
 
     // Set the successor indices for all nodes in the free list, the skip list
     // contains only one node
-    for (uint8_t i = 2; i < threads + 1; i++) {
+    for (size_t i = 2; i < threads + 1; i++) {
         los->nodes[i].successor = i + 1;
     }
 

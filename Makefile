@@ -9,8 +9,8 @@ CC=gcc
 CFLAGS=-I$(IDIR) -lm -lpthread -g -O3
 WFLAGS = -Wall -Wextra -Wpedantic
 
-HED=pointer.h node.h los.h reservoir.h
-OBJ=node.o pointer.o los.o reservoir.o
+HED=pointer.h node.h los.h reservoir.h args.h
+OBJ=node.o pointer.o los.o reservoir.o args.o
 
 _HED=$(patsubst %,$(IDIR)/%,$(HED))
 _OBJ=$(patsubst %,$(ODIR)/%,$(OBJ))

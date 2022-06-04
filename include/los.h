@@ -16,7 +16,7 @@ struct los {
 };
 
 // Allocates and initializes the list of skips
-struct los* create_los(uint8_t threads, size_t reservoir_size);
+struct los* create_los(size_t threads, size_t reservoir_size);
 
 // Deallocates the list of skips
 void free_los(struct los* los);
