@@ -71,7 +71,7 @@ void* thread_entry(void* arg) {
 #endif
 
 void print_reservoir(struct reservoir* reservoir) {
-    printf("\nReservoir content:\n");
+    printf("Reservoir content:\n");
 
     for (size_t i = 0; i < reservoir->size; i++) {
         printf("\t%lu: %s\n", i, (char*) reservoir->tuple[i].data);
@@ -114,6 +114,9 @@ int main(int argc, char **argv) {
     for (size_t i = 0; i < args.threads; i++) {
         struct thread_ctx* ctx = threads + i;
 
+        ctx->insertions = args.insertions;
+        ctx->reservoir_size = args.reservoir_size;
+
         ctx->index = i;
         ctx->los = los;
         ctx->reservoir = reservoir;
@@ -132,14 +135,14 @@ int main(int argc, char **argv) {
 
     printf("\nMeasurement:\n");
     printf("\tInsertions: %zu\n", args.threads * args.insertions);
-    printf("\tDelta: %.0Lfms (%ld ns)\n", roundl(ms), ns);
+    printf("\tDelta: %.0Lfms (%ld ns)\n\n", roundl(ms), ns);
 
 #ifndef NO_SAMPLE
-    print_reservoir(reservoir);
+    if (args.verbose) {
+        print_reservoir(reservoir);
+    }
 #endif
 
     free_reservoir(reservoir);
     free_los(los);
-
-    printf("Done\n");
 }
