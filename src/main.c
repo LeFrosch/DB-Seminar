@@ -29,25 +29,39 @@ void insertion_placeholder() {
 }
 
 #ifndef NO_SAMPLE
+
 void* thread_entry(void* arg) {
     struct thread_ctx* ctx = arg;
 
+    bool preload_phase = true;
     uint8_t own = 0;
     struct node* skip_node = NULL;
 
     for (size_t i = 0; i < ctx->insertions; i++) {
-        if (!skip_node) {
-            own = acquire(ctx->los, own, ctx->reservoir_size);
-            skip_node = get_node(ctx->los, own);
+        if (preload_phase) {
+            ssize_t result = preload(ctx->reservoir);
+
+            if (result < 0) {
+                preload_phase = false;
+            } else {
+                char buf[100];
+                snprintf(buf, 100, "Thread: %i (preload), Tuple: %lu", ctx->index, i);
+                insert_into_reservoir_preload(ctx->reservoir, buf, 100, result);
+            }
         }
+        if (!preload_phase) {
+            if (!skip_node) {
+                own = acquire(ctx->los, own, ctx->reservoir_size);
+                skip_node = get_node(ctx->los, own);
+            }
 
-        if (--skip_node->length <= 0) {
-            char buf[100];
-            snprintf(buf, 100, "Thread: %i, Tuple: %lu", ctx->index, i);
+            if (--skip_node->length <= 0) {
+                char buf[100];
+                snprintf(buf, 100, "Thread: %i, Tuple: %lu", ctx->index, i);
+                insert_into_reservoir(ctx->reservoir, buf, 100, skip_node->index);
 
-            insert_into_reservoir(ctx->reservoir, buf, 100, skip_node->index);
-
-            skip_node = NULL;
+                skip_node = NULL;
+            }
         }
 
         insertion_placeholder();
@@ -80,7 +94,7 @@ void print_reservoir(struct reservoir* reservoir) {
     printf("\n");
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
     struct args args;
     parse_args(&args, argc, argv);
 
@@ -124,13 +138,15 @@ int main(int argc, char **argv) {
         pthread_create(&ctx->thread_id, NULL, thread_entry, ctx);
     }
 
+    printf("All threads running\n");
+
     for (size_t i = 0; i < args.threads; i++) {
         pthread_join(threads[i].thread_id, NULL);
     }
 
     clock_gettime(CLOCK_MONOTONIC, &finish);
 
-    long ns =  finish.tv_sec * S_TO_NS + finish.tv_nsec - start.tv_sec * S_TO_NS - start.tv_nsec;
+    long ns = finish.tv_sec * S_TO_NS + finish.tv_nsec - start.tv_sec * S_TO_NS - start.tv_nsec;
     long double ms = ns * 1.0e-6L;
 
     printf("\nMeasurement:\n");
