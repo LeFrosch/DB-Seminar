@@ -10,7 +10,7 @@ const char *argp_program_version = "DB-Seminar: Concurrent only sampling impleme
 #ifndef NO_SAMPLE
                                    "sampling";
 #else
-                                   "not samplint";
+                                   "not sampling";
 #endif
 
 const char *argp_program_bug_address = "daniel.brauner@tum.de";
