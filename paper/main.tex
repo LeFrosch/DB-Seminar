@@ -1,9 +1,4 @@
-\documentclass[acmlarge]{acmart}
-
-% Remove the "ACM Reference Format" with the useless URL
-\settopmatter{printacmref=false}
-% Remove copyright
-\setcopyright{none}
+\documentclass[acmlarge,nonacm]{acmart}
 
 \begin{document}
     \title{Concurrent online sampling, for all, for free}
@@ -22,18 +17,27 @@
 
     \section{Introduction}
         % What is sampling
+        A random subset of data is called a sample, usually the sample is much smaller then the actual date. In the context of Database Management Systems (DBMS) a sample is a smaller table that contains a copy of random rows from a table. The process of creating and maintaining a sample is called sampling. Maintaining hereby refers to keeping the sample up to date when the underlying data changes.
+    
         % Why is sampling necessary
-        This is the introduction.
+        Such a sample can be used by the query optimizer in modern DBMS. For instance the date stored in the sample can be used to predict the size of intermediate results when joining multiple tables. This is very important when the query optimizer tries to determine the order in which the joins should be executed. Also, the sample can be used to predict the result of aggregate queries, like SUM, COUNT, etc. 
+
+        % Vocab
+
 
     \section{Motivation} 
         % Current sampling algorithms
-        This is the motivation.
+        The most naive way to provide a sample to the optimizer, would be generating it on demand. But generating a sample is not cheap, specially when the data is stored on disk. Because to create a random sample, random rows need to be read resulting in random I/O. Therefore, in some cases generating the sample can take more time then the actual query to execute.
+
+        Some modern DBMS address this problem by only generating the sample periodically. Generating the sample still requires random I/O but the coast can be amortized over multiple queries. However, this introduces a new issues, the sample can become stale over time. Hence, predictions based on the sample can be wrong and are no longer useful for the query optimizer.
 
     \section{Solution}
         % What is online sampling
+        Online sampling tries to address these issues by keeping the sample up to date while inserting new elements into the Database. Because every element that should be inserted is taken into consideration by the algorithm the sample is always up to date. Furthermore, no random I/O is required because no rows need to be retrieved from the disk.
+
         % Requirements
+        
         % The algorithm it self
-        This is the solution.
     
     \section{Example}
         % An example who the algorithm works (similar to one in the OG)
