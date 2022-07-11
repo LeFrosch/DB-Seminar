@@ -28,8 +28,6 @@
         % Why is sampling necessary
         Such a sample can be used by the query optimizer in modern DBMS. For instance the date stored in the sample can be used to predict the size of intermediate results when joining multiple tables. This is very important when the query optimizer tries to determine the order in which the joins should be executed. Also, the sample can be used to predict the result of aggregate queries, like SUM, COUNT, etc. 
 
-        % Vocab
-
 
     \section{Motivation} 
         % Current sampling algorithms
@@ -57,26 +55,40 @@
         \begin{wrapfigure}{r}{0.4\textwidth}
             \centering
             \includegraphics[height=5cm]{figure1.pdf}
-            \caption{Example of two skips with different lengths}
+            \caption{Example of two Skips with different lengths}
         \end{wrapfigure}
-        But deciding for every tuple separately using the probability method can be rather expensive. Therefore, the algorithm generates a length of a skip instead. The length is stored with some additional metadata in skip node and can be used to determine how many tuples should be skipped until the next reservoir tuple. A skip node that contains valid data is also called a skip. To determine whether a tuple is a reservoir tuple or not using the skip length is very cheap. First the skip length needs to be decremented by one and if the length reached zero the current tuple is a reservoir tuple and a new one skip needs to be generated. Figure one shows an example for two skips. The white tuples are skipped and the gray tuples are reservoir tuples.
+        But deciding for every tuple separately using the probability method can be rather expensive. Therefore, the algorithm generates a length instead. The length and some additional metadata is called a Skip and can be stored in a node. A Skip can be used to determine how many tuples should be skipped until the next reservoir tuple. Determining whether a tuple is a reservoir tuple or not using the length of a Skip is very cheap. First the length needs to be decremented by one and if the length reached zero the current tuple is a reservoir tuple and a new Skip needs to be generated. If the length remains greater then zero the current tuple should be skipped. Figure one shows an example for two Skips. The white tuples are skipped and the gray tuples are reservoir tuples.
 
-        % Multithreaded skip nodes
-        Hence, the skips are already stored in self contained nodes, these nodes can easily be distributed among multiple threads. Only the generation and distribution needs to be synchronized, 
-        % Explain ownership
-        once a thread owns a node no more synchronization is required and the thread can work independently. Every thread receives an independent stream of tuples that should be inserted and therefore also sampled. The amount of tuples is unknown and each thread could stop receiving tuples at any moment.
+        % Multithreaded nodes
+        Hence, Skips are already stored in self contained nodes, these nodes can easily be distributed among multiple threads. Only the generation and distribution needs to be synchronized. After a thread received a Skip it takes ownership of it, therefore the thread has exclusive access to it until the Skip is returned. Once a thread owns a Skip no more synchronization is required and the thread can work independently. 
 
         % Preallocation
-        To ensure the constant use of memory it is necessary that the maximum amount of threads that can be used for inserting is known when the algorithm is initialized. In consequence all skip nodes can be preallocated, one for every thread and one additional node as reserve (the reason for the reserve node is explained later on). Hence, a pointer to a skip node can simply be an index into the node array.
+        To ensure the constant use of memory it is necessary that the maximum amount of threads that can be used for inserting is known when the algorithm is initialized. In consequence, all nodes can be preallocated, one for every thread and one additional node as reserve. Hence, a pointer to a node can simply be an index into the node array.
 
         % States of a skip node
         \begin{figure}[h]
             \includegraphics[height=3.5cm]{figure2.pdf}
-            \caption{States of a skip node and the transitions between the states}
+            \caption{States of a node and the transitions between the states}
         \end{figure}
-        One additional field that is stored in every skip node, is a successor pointer. This pointer can be used to arrange nodes in a singly linked list. There are three states a skip node can be in, initially all nodes are in the free list. The free list contains all nodes that are currently not used by any thread and nodes that do not contain valid data. If a skip should be generated a node needs to be allocated, thus it needs to be removed from the free list and the data of skip can be stored in this node. Afterwards the node is added to the list of skips (LOS). The LOS contains all nodes that store a valid skip, but are not currently owned by a thread. Additionally the LOS should always contain at least on skip. When a thread needs acquire a new skip, it can pop the first item of the LOS. Afterwards the thread might need to generate a new skip to ensure that the LOS is not empty. Figure 2 illustrates the lifecycle of a skip node.
+        One additional field that is stored in every node, is a successor pointer. This pointer can be used to arrange nodes in a singly linked list. There are three states a node can be in, initially all nodes are in the free list. The free list contains all nodes that are currently not owned by any thread and nodes that do not contain a Skip. If a Skip should be generated a node needs to be allocated, thus it needs to be removed from the free list and the data of the Skip can be stored in this node. Afterwards, the node is added to the list of skips (LOS). The LOS contains all nodes that store a valid Skip, but are not currently owned by a thread. Additionally the LOS should always contain at least on Skip. When a thread needs acquire a new Skip, it can pop the first item of the LOS. Afterwards, the thread might need to generate a new Skip to ensure that the LOS is not empty. Figure two illustrates the lifecycle of a node.
 
     \subsection{Sampling while inserting}
+
+        % Description of the process
+        Every thread receives an independent stream of tuples that should be inserted and therefore also sampled. The amount of tuples is unknown and each thread could stop receiving tuples at any moment. To determine if a tuple is reservoir tuple or not the thread needs to own a Skip. Therefore, if the thread currently does not own a valid Skip it needs to acquire a new one. A Skip can be invalid if the length already is zero. Once the thread owns a Skip it can use the the length to determine whether the tuple is a reservoir tuple using the process described above. If the tuple is a reservoir tuple it needs to be inserted into the sample, but in both cases the tuple needs to be inserted into the database. Figure three shows a flow diagram for this process with two key decision points. 
+
+        \begin{figure}[h]
+            \includegraphics[height=2.9cm]{figure3.pdf}
+            \caption{Flow diagram that shows the steps necessary to determine whether a tuple is a reservoir tuple}
+        \end{figure}
+
+        % Synchronization 
+        This process only introduces two cases in which extra synchronization is required. First, if a new Skip needs to be acquire and second if the tuple needs to be added to sample. However, both of theses cases only apply when the length reached zero and when inserting into the sample most of the time the different threads do not interfere with each other.
+
+    \subsection{Inserting into the sample}
+
+        % Description of the Sample table
+        Besides the actual tuples the sample contains on additional filed.
 
     \section{Example}
         % An example who the algorithm works (similar to one in the OG)
