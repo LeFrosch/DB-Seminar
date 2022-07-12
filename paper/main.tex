@@ -2,7 +2,6 @@
 
 % For images 
 \usepackage{graphicx}
-\usepackage{wrapfig}
 
 \graphicspath{ {./images/} }
 
@@ -39,7 +38,7 @@
         % What is online sampling
         Online sampling tries to address all these issues. The main idea behind online sampling is to create and maintain the sample when inserting new tuples into the database. Because every tuple that is going to be inserted is taken into consideration by the algorithm the sample is always up to date. Furthermore, no random I/O is required because no rows need to be retrieved from the disk. This approach can also be extended to support updates and deletes, but handling these operations is a little bit more involved. Modern DBMS use multiple threads for inserting and sometimes also allocate and deallocate threads on demand. Therefore, the algorithm also needs to support multithreading with a varying amount of threads.
         % Requirements
-        In consequence the requirements are:
+        To summarize the goal of online sampling is to produce a sample of size $m$ from a data set of an unknown size $n$ with $m<n$. Additional the algorithm should meet the following requirements:
         \begin{enumerate}
             \item Keep Samples up to date while inserting new tuples
             \item As little overhead as possible, per thread and overall
@@ -48,14 +47,18 @@
             \item Minimum amount of shared memory writes (as less locks as possible)
         \end{enumerate}
         
+        % Phases
+        The algorithm can be broken down into three phases, in the first one all required data structures are created and initialized. Initially the sample is empty and phase two preloads the sample. Thus, all first $m$ tuples are inserted in order into the sample. During phase the where the actual sampling takes place, the algorithm assumes that the sample is full.
+        
     \subsection{Skips}
         % The idea behind skip length
-        To build a random sample the algorithm needs to decide probabilistically for every inserted tuple whether the tuple is a part of the sample or not. Tuples which are inserted into the sample are called sample tuples and tuple which are not inserted are "skipped". But deciding for every tuple separately whether it is a sample tuple or not can be rather expensive. However, the amount of tuples that are skipped between two consecutive sample tuples follows a geometric distribution. Therefore, to avoid running a calculation for every inserted tuple, the length between to sample tuples can be generated randomly. This length is refereed to as the Skip length and can be used to calculate the next sample tuple. Every time a new tuple should be inserted the length can be decremented by one. If the length is equal to zero after decrementing it the current tuple is a sample tuple, otherwise it will be skipped. Once the length has reached zero a new length needs to be generated. Figure one shows an example of two Skips, 
+        To build a random sample the algorithm needs to decide probabilistically for every inserted tuple whether the tuple is a part of the sample or not. Tuples which are inserted into the sample are called sample tuples and tuple which are not inserted are "skipped". But deciding for every tuple separately whether it is a sample tuple or not can be rather expensive. However, the amount of tuples that are skipped between two consecutive sample tuples follows a geometric distribution. Therefore, to avoid running a calculation for every inserted tuple, the length between to sample tuples can be generated randomly. This length is refereed to as the Skip length and can be used to calculate the next sample tuple. Every time a new tuple should be inserted the length can be decremented by one. If the length is equal to zero after decrementing it the current tuple is a sample tuple, otherwise it will be skipped. Once the length has reached zero a new length needs to be generated. Figure \ref{fig:skips} shows an example of two Skips, 
         the white tuples are skipped and the gray tuples are sample tuples.
-        \begin{figure}[h]
+        \begin{figure}[H]
             \centering
             \includegraphics[height=5cm]{figure1.pdf}
             \caption{Example of two Skips with different lengths}
+            \label{fig:skips}
         \end{figure}
 
         % Preallocation
@@ -65,15 +68,60 @@
         Hence, Skips are already stored in self contained nodes, these nodes can easily be distributed among multiple threads. Once a thread has received a Skip, the thread can process tuples independently and can use its own Skip to determine which tuples to add to the sample. After the thread has reached a sample tuple and the length of the Skip has reached zero the thread needs to acquire a new Skip. Only the generation and distribution of Skips needs to be synchronized.
 
         % Lifecycle of a skip
-        One additional field that is stored in every node, is a successor pointer. This pointer can be used to arrange nodes in a singly linked list and therefore to keep track of the state of a node. There are three states a node can be in, initially all nodes are in the free list. The free list contains all nodes that are currently not in use and can be considered as a pool of nodes that can be reused to store a Skip. If a Skip should be generated a node needs to be allocated, thus it is removed from the free list and the data of the Skip can be stored in this node. All generated Skips are stored in the list of Skips (LoS). The LoS always contains at least one Skip, this is also the reason why an extra reserve node needs to be allocated. When a thread needs to acquire a new Skip, it can pop the first item of the LoS. However, if the LoS only contains on item the thread needs to generate a new Skip and added to the LoS again. Figure two visualizes all three states and the transitions between these states.
-        \begin{figure}[h]
+        One additional field that is stored in every node, is a successor pointer. This pointer can be used to arrange nodes in a singly linked list and therefore to keep track of the state of a node. There are three states a node can be in, initially all nodes are in the free list. The free list contains all nodes that are currently not in use and can be considered as a pool of nodes that can be reused to store a Skip. If a Skip should be generated a node needs to be allocated, thus it is removed from the free list and the data of the Skip can be stored in this node. All generated Skips are stored in the list of Skips (LoS). The LoS always contains at least one Skip, this is also the reason why an extra reserve node needs to be allocated. When a thread needs to acquire a new Skip, it can pop the first item of the LoS. However, if the LoS only contains on item the thread needs to generate a new Skip and added to the LoS again. Figure \ref{fig:lifecycle} visualizes all three states and the transitions between these states.
+        \begin{figure}[H]
             \includegraphics[height=2.8cm]{figure2.pdf}
             \caption{States of a node and the transitions between the states}
+            \label{fig:lifecycle}
         \end{figure}
 
     \subsection{Inserting}
         % Description of the process
-        Every thread receives an independent stream of tuples that should be inserted and therefore also sampled. The amount of tuples is unknown and each thread could stop receiving tuples at any moment. Every tuple  that the thread receives is inserted into the database and if the tuple is a sample tuple it is also added to the sample. To determine if a tuple is a sample tuple or not the thread needs to own a valid Skip. The Skip could be invalid if the length has reached zero. Therefore, if the thread currently does not own a valid Skip it needs to acquire a new one from the LoS. Once the thread owns a Skip it can use the length to determine whether the tuple is a sample tuple using the process described above.
+        Every thread receives an independent stream of tuples that should be inserted and therefore also sampled. The amount of tuples is unknown and each thread could stop receiving tuples at any moment. Every tuple  that the thread receives is inserted into the database and if the tuple is a sample tuple it is also added to the sample. To determine if a tuple is a sample tuple or not the thread needs to own a valid Skip. The Skip could be invalid if the length has reached zero. Therefore, if the thread currently does not own a valid Skip it needs to acquire a new one from the LoS. Once the thread owns a Skip it can use the length to determine whether the tuple is a sample tuple using the process described above. Figure \ref{fig:inserting} shows a flow diagram that visualizes this process.
+
+        % Synchronization
+        Only two steps require additional synchronization, first if a new Skip needs to be acquired and second if the tuple needs to be inserted into the sample. However, both of these steps are only executed if a tuple is inserted into the sample and therefore most of the time no extra overhead is introduced. The two steps that require synchronization are highlighted in gray in figure \ref{fig:inserting}.
+        \begin{figure}[H]
+            \includegraphics[height=2.2cm]{figure3.pdf}
+            \caption{Flow diagram that shows the process of deciding whether a tuple is a sample tuple or not}
+            \label{fig:inserting}
+        \end{figure}        
+
+        % Description of the sample
+        All tuples that are added to the sample are inserted into a random position. In this phase of the algorithm the sample is always full and newly inserted tuples will override other tuples. But to ensure that two threads cannot write to the same row in the sample at the same time a very fine grained synchronization is applied. Every row has its own lock, therefore it is possible that two threads can write to different rows at the same time. In consequence the synchronization overhead for inserting into the sample is very low, because it is unlikely that a thread has to wait to acquire the lock for a row. 
+
+        % Skip index
+        Besides the actual tuple data the sample also stores the index of the Skip that inserted the tuple. The index of a Skip is stored in its metadata and can be used to determine the order in which the Skips where generated. Every time a new Skip is generated a counter is increased and its value can be used as the index for the current Skip.
+        % Overwrite protection 
+        The index can be used to ensure that older tuples cannot overwrite newer tuples. Thereupon when a new tuple should be inserted into the sample the Skip index of this tuple can be compared to the index in the sample and if the index of the tuple is smaller the insert will be rejected. This mechanism is important if there is for instance a slower thread that inserts into the database and a faster one. It could be the case that the faster one already inserted multiple tuples into the sample and if the slower thread later tries to insert a tuple into a row with a newer tuple, the slower thread would overwrite progress of the faster thread. Table \ref{tab:sample} visualizes an example sample table.
+        \begin{table}[H]
+            \begin{tabular}{| c | c | c | c|} 
+                \hline
+                Sample Index & Skip index & Lock & Tuple \\
+                \hline
+                \hline
+                0 & 15 & 0 & DATA \\
+                \hline
+                1 & 42 & 0 & DATA \\
+                \hline
+                2 & 13 & 0 & DATA \\
+                \hline
+                ... & ... & ... & ... \\
+                \hline
+                $m - 1$ & 31 & 0 & DATA \\
+                \hline
+            \end{tabular}
+            \vspace{5mm}
+            \caption{Example of how a sample table could look like}
+            \label{tab:sample}
+        \end{table}
+
+    \subsection{Acquiring}
+        % Recap
+        In order to determine whether a tuple is a sample tuple or not a threads needs to own a Skip. To acquire a Skip the threads needs remove the first item from the LoS. However, accessing the LoS requires synchronization and if the LoS contains only one Skip the thread needs to generate a new Skip.
+
+        % How does the head pointer look like
+        % Races - ensured progress
 
     \section{Example}
         % An example who the algorithm works (similar to one in the OG)
