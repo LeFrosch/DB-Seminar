@@ -116,12 +116,13 @@
             \label{tab:sample}
         \end{table}
 
-    \subsection{Acquiring}
+    \subsection{ownership of Skips}
         % Recap
         In order to determine whether a tuple is a sample tuple or not a threads needs to own a Skip. To acquire a Skip the threads needs access the LoS. However, accessing the LoS requires synchronization and if the LoS contains only one Skip the thread needs to generate a new Skip.
         
         % How does the head pointer look like
-        The free list and the LoS can be accessed using a head pointer. A pointer to a node is an index into the preallocated node are. Threads can only push a node or pop a node from a list. To ensure that no concurrent modifications can be meade to a list the head pointer is written with one atomic compare and swap operation. In order to detected changes between reading a node and make changes to the list a thread first needs to store the current pointer to a list. When the pointer changed in the meantime the compare and swap operation will fail. However, nodes are frequently added and removed to a list and it could be the case that the pointer was changed and then changed back to the original node. In this case the compare and swap operation would fail but the pointer was modified in the meantime. To address this problem the pointer also contains a version besides the index. This pointer can be stored in 64 bit integer, hereby the first 32bit store the version and the rest stores the index. Figure \ref{fig:pointer} visualizes the layout of a pointer.
+        The free list and the LoS can be accessed using a head pointer. A pointer to a node is an index into the preallocated node are. Threads can only push a node or pop a node from a list. To ensure that no concurrent modifications can be meade to a list the head pointer is written with one atomic compare and swap operation. In order to detected changes between reading a node and make changes to the list a thread first needs to store the current pointer to a list. When the pointer changed in the meantime the compare and swap operation will fail. However, nodes are frequently added and removed to a list and it could be the case that the pointer was changed and then changed back to the original node. In this case the compare and swap operation would fail but the pointer was modified in the meantime. To address this problem the poin
+        ter also contains a version besides the index. This pointer can be stored in 64 bit integer, hereby the first 32bit store the version and the rest stores the index. Figure \ref{fig:pointer} visualizes the layout of a pointer.
         \begin{figure}[H]
             \includegraphics[height=2.2cm]{figure4.pdf}
             \caption{The structure of a head pointer}
@@ -129,13 +130,25 @@
         \end{figure}  
 
         % Actual acquiring
-        The process of acquire a node can be broken down into three steps. 
+        The process of acquire a node from the LoS can be broken down into three steps. First the thread needs to read the head pointer and store the current value. Afterwards, the thread can use the index stored in the pointer to retrieve the node form the LoS. In the second step the thread needs to generate the successor for the Skip stored in the node and lastly the thread tries to writes the successor into the head of the LoS. If the update succeeds the thread now owns a new Skip and the head of the LoS is set to the successor Skip. On the other hand if the update fails, the thread needs to start over. However, in practice this is not a problem, because every time a thread fails to update the head another thread successfully updated the head and therefore overall progress is guaranteed. Figure \ref{fig:acquire} shows the three steps necessary to acquire a Skip and the retry loop.
+        \begin{figure}[H]
+            \includegraphics[height=2.4cm]{figure5.pdf}
+            \caption{Flow diagram that shows the process of acquire a Skip from the LoS}
+            \label{fig:acquire}
+        \end{figure}
 
+        % Generating the successor
+        If the LoS only contains one node, the thread needs to generate a successor before takeing ownership of this node. In order to generate a Skip the thread needs to own a node. It could be the case that the thread already owns a node from a previous iteration or if the thread does not own a node it needs to retrieve one from the free list. Using a node and the current Skip at the head of the LoS the thread can generate the successor. However, it could also be the case that the LoS contains more then one node and no successor needs to be generated. But if the thread already owns a node, it needs to deallocate this node. Because a thread cannot own more then one node. Deallocateing a node refers to inserting the node into the free list. To summarize, there a two cases where a thread needs to allocate or deallocate a node: 
+        \begin{itemize}
+            \item Allocate: If the thread does not own a node and the LoS only contains one node
+            \item Deallocate: If the thread owns a node and the LoS contains more the one node
+        \end{itemize}
 
-        % Races - ensured progress
+        % Returning a skip
+        Hence an inserting thread could be terminated at any time it needs to be possible for a thread to return the Skip it is currently using. To return a skip 
 
     \section{Example}
-        % An example who the algorithm works (similar to one in the OG)
+        % An example who the algorithm works (lar to one in the OG)
         This is an example.
 
     \section{Evaluation}
