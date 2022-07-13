@@ -118,9 +118,20 @@
 
     \subsection{Acquiring}
         % Recap
-        In order to determine whether a tuple is a sample tuple or not a threads needs to own a Skip. To acquire a Skip the threads needs remove the first item from the LoS. However, accessing the LoS requires synchronization and if the LoS contains only one Skip the thread needs to generate a new Skip.
-
+        In order to determine whether a tuple is a sample tuple or not a threads needs to own a Skip. To acquire a Skip the threads needs access the LoS. However, accessing the LoS requires synchronization and if the LoS contains only one Skip the thread needs to generate a new Skip.
+        
         % How does the head pointer look like
+        The free list and the LoS can be accessed using a head pointer. A pointer to a node is an index into the preallocated node are. Threads can only push a node or pop a node from a list. To ensure that no concurrent modifications can be meade to a list the head pointer is written with one atomic compare and swap operation. In order to detected changes between reading a node and make changes to the list a thread first needs to store the current pointer to a list. When the pointer changed in the meantime the compare and swap operation will fail. However, nodes are frequently added and removed to a list and it could be the case that the pointer was changed and then changed back to the original node. In this case the compare and swap operation would fail but the pointer was modified in the meantime. To address this problem the pointer also contains a version besides the index. This pointer can be stored in 64 bit integer, hereby the first 32bit store the version and the rest stores the index. Figure \ref{fig:pointer} visualizes the layout of a pointer.
+        \begin{figure}[H]
+            \includegraphics[height=2.2cm]{figure4.pdf}
+            \caption{The structure of a head pointer}
+            \label{fig:pointer}
+        \end{figure}  
+
+        % Actual acquiring
+        The process of acquire a node can be broken down into three steps. 
+
+
         % Races - ensured progress
 
     \section{Example}
