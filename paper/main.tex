@@ -12,7 +12,9 @@
     \email{daniel.brauner@tum.de}
     
     \begin{abstract}
-        This is the abstract.
+        One of the most important assets for the query optimizer in modern Database Management Systems is a random subset of the data. This subset needs to be derived from the data which is stored in the tables. Traditionally, generating such a sample was very expensive owing to the random access pattern. Also if the sample is generated periodically it can become stale overtime. Therefore, it would be way more performant to generate and maintain the sample while the entries are written to the database.
+
+        The paper Concurrent online sampling, for all, for free by Altan Birler, Bernhard Radke, and Thomas Neumann \cite{OG} introduces a new algorithm that maintains a random sample in memory with minimal overhead. Additional the algorithm requires no more random, because every tuple is take into consideration when it is first inserted.
     \end{abstract}
 
     % From the OG
@@ -36,7 +38,7 @@
 
     \section{Solution}
         % What is online sampling
-        Online sampling tries to address all these issues. The main idea behind online sampling is to create and maintain the sample when inserting new tuples into the database. Because every tuple that is going to be inserted is taken into consideration by the algorithm the sample is always up to date. Furthermore, no random I/O is required because no rows need to be retrieved from the disk. This approach can also be extended to support updates and deletes, but handling these operations is a little bit more involved. Modern DBMS use multiple threads for inserting and sometimes also allocate and deallocate threads on demand. Therefore, the algorithm also needs to support multithreading with a varying amount of threads.
+        A solution to this problem is present in a paper by Altan Birler, Bernhard Radke, and Thomas Neumann \cite{OG}. Their online sampling algorithm address all these issues. The main idea behind online sampling is to create and maintain the sample when inserting new tuples into the database. Because every tuple that is going to be inserted is taken into consideration by the algorithm the sample is always up to date. Furthermore, no random I/O is required because no rows need to be retrieved from the disk. This approach can also be extended to support updates and deletes, but handling these operations is a little bit more involved. Modern DBMS use multiple threads for inserting and sometimes also allocate and deallocate threads on demand. Therefore, the algorithm also needs to support multithreading with a varying amount of threads.
         % Requirements
         To summarize the goal of online sampling is to produce a sample of size $m$ from a data set of an unknown size $n$ with $m<n$. Additional the algorithm should meet the following requirements:
         \begin{enumerate}
@@ -148,22 +150,26 @@
         Since an inserting thread could be terminated at any time it needs to be possible for a thread to return the Skip it is currently using. To return a Skip, the Skip needs to be added to the LoS.
         
     \section{Example}
-        % An example who the algorithm works (like the one in the OG)
-        The following example will illustrate how the algorithm might be executed with two inserting threads $T0$ and $T1$. Figure \ref{fig:example} visualizes the state of all nodes and Skips used in this example. This example assumes that the sample as already been prefilled.
+        % Introduction to the example 
+        The following example will illustrate hwo the algorithm could work with two inserting threads, $T0$ and $T1$. Figure \ref{fig:example} visualizes the state of all nodes and Skips used in this example. This example assumes that the sample as already been prefilled.
         \begin{figure}[H]
             \includegraphics[height=8cm]{figure6.pdf}
             \caption{The state of every Skip and node for the example}
             \label{fig:example}
         \end{figure}
 
-        Initially all nodes are in the free list, except one node that contains the initial Skip (0). If $T0$ starts inserting it needs to acquire a Skip from the LoS. But because the LoS only contains one entry, $T0$ needs to generate a successor. However, $T0$ does not own a node and therefore it needs to retrieve one from the free list. Using this node and the initial Skip $T0$ can now generate the first Skip and write it to the head of the LoS. Afterwards $T0$ owns the initial Skip and the LoS contains the newly generated first Skip (1). When $T1$ also starts inserting it also needs to retrieve a Skip from the LoS. Since the LoS still contains just one Skip, $T1$ also needs to generate the second Skip and insert it into the LoS (2). In the meantime $T0$ reach a sample tuple and needs a new Skip to continue inserting. The LoS only contains one element, but this time $T0$ already owns a node from the previous iteration. Therefore, $T0$ can use its node and the Skip from the LoS to generate the third Skip. $T0$ can now swap the newly generated Skip with the second Skip, to take ownership of the second Skip (3). In this example $T1$ is terminated before it reaches a sample tuple. In consequence $T1$ needs to return its Skip to the LoS. The LoS now contains two element, Skip 1 that was previously owned by $T1$ and Skip 3 that was generated by $T0$ (4). At last $T0$ needs another Skip to continue inserting. This time $T0$ again owns a node from the previous iteration, but the LoS contains two elements. Therefore $T0$ does not need to generate a successor and can simply take ownership of the first Skip stored in the LoS. However, $T0$ cannot own two nodes and therefore $T0$ inserts the node of Skip into the free list (5).
+        % An example who the algorithm works (like the one in the OG)
+        Initially all nodes are in the free list, except one node that contains the initial Skip (0). If $T0$ starts inserting it needs to acquire a Skip from the LoS. But because the LoS only contains one entry, $T0$ needs to generate a successor. However, $T0$ does not own a node and therefore it needs to retrieve one from the free list. Using this node and the initial Skip $T0$ can now generate the first Skip and swap it with the head of LoS. Afterwards $T0$ owns the initial Skip and the LoS contains the newly generated first Skip (1). When $T1$ also starts inserting it also needs to retrieve a Skip from the LoS. Since the LoS still contains just one Skip, $T1$ also needs to generate the second Skip and swap it with the head of the LoS (2). In the meantime $T0$ reach a sample tuple and needs a new Skip to continue inserting. The LoS only contains one element, but this time $T0$ already owns a node from the previous iteration. Therefore, $T0$ can use its node and the Skip from the LoS to generate the third Skip. $T0$ can now swap the newly generated Skip with the second Skip, to take ownership of the second Skip (3). In this example $T1$ is terminated before it reaches a sample tuple. In consequence $T1$ needs to return its Skip to the LoS. The LoS now contains two elements, Skip 1 that was previously owned by $T1$ and Skip 3 that was generated by $T0$ (4). At last $T0$ needs another Skip to continue inserting. This time $T0$ again owns a node from the previous iteration, but the LoS contains two elements. Therefore $T0$ does not need to generate a successor and can simply take ownership of the first Skip stored in the LoS. However, $T0$ cannot own two nodes and therefore $T0$ inserts the node of the previous Skip into the free list (5).
 
-        This example contains both allocation and deallocation. In step 1 $T0$ needs to allocate a node and in step 2 $T1$ needs to allocate a node. Because $T1$ returns its Skip the LoS contains two Skips after Step 4. Therefore $T0$ needs to deallocate the node it owns in Step 5.
+        This example contains both allocation and deallocation. $T0$ needs to allocate a node in step 1 and $T1$ needs to allocate a node in step 2. Because $T1$ returns its Skip, the LoS contains two Skips after Step 4. Therefore, $T0$ needs to deallocate its own node in Step 5.
 
 
     \section{Evaluation}
         % Are all requirements met
         % Tables from the OG
         This is the evaluation.
+
+    \bibliographystyle{ACM-Reference-Format}
+    \bibliography{sources}
 
 \end{document}

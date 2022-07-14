@@ -1,0 +1,17 @@
+@inproceedings{OG,
+  author    = {Birler, Altan and Radke, Bernhard and Neumann, Thomas},
+  title     = {Concurrent Online Sampling for All, for Free},
+  year      = {2020},
+  isbn      = {9781450380249},
+  publisher = {Association for Computing Machinery},
+  address   = {New York, NY, USA},
+  url       = {https://doi.org/10.1145/3399666.3399924},
+  doi       = {10.1145/3399666.3399924},
+  abstract  = {Database systems rely upon statistical synopses for cardinality estimation. A very versatile and powerful method for estimation purposes is to maintain a random sample of the data. However, drawing a random sample of an existing data set is quite expensive due to the resulting random access pattern, and the sample will get stale over time. It is much more attractive to use online sampling, such that a fresh sample is available at all times, without additional data accesses. While clearly superior from a theoretical perspective, it was not clear how to efficiently integrate online sampling into a database system with high concurrent update and query load.We introduce a novel highly scalable online sampling strategy that allows for sample maintenance with minimal overhead. We can trade off strict freshness guarantees for a significant boost in performance in many-core shared memory scenarios, which is ideal for estimation purposes. We show that by replacing the traditional periodical sample reconstruction in a database system with our online sampling strategy, we get virtually zero overhead in insert performance and completely eliminate the slow random I/O needed for sample construction.},
+  booktitle = {Proceedings of the 16th International Workshop on Data Management on New Hardware},
+  articleno = {5},
+  numpages  = {8},
+  keywords  = {query optimization, online sampling, database statistics},
+  location  = {Portland, Oregon},
+  series    = {DaMoN '20}
+}
