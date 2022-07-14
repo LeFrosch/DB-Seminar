@@ -56,7 +56,7 @@
         % The idea behind skip length
         To build a random sample the algorithm needs to decide probabilistically for every inserted tuple whether the tuple is a part of the sample or not. Tuples which are inserted into the sample are called sample tuples and tuple which are not inserted are "skipped". But deciding for every tuple separately whether it is a sample tuple or not can be rather expensive. However, the amount of tuples that are skipped between two consecutive sample tuples follows a geometric distribution. Therefore, to avoid running a calculation for every inserted tuple, the length between to sample tuples can be generated randomly. This length is refereed to as the Skip length and can be used to calculate the next sample tuple. Every time a new tuple should be inserted the length can be decremented by one. If the length is equal to zero after decrementing it the current tuple is a sample tuple, otherwise it will be skipped. Once the length has reached zero a new length needs to be generated. Figure \ref{fig:skips} shows an example of two Skips, 
         the white tuples are skipped and the gray tuples are sample tuples.
-        \begin{figure}[H]
+        \begin{figure}[h]
             \centering
             \includegraphics[height=5cm]{figure1.pdf}
             \caption{Example of two Skips with different lengths}
@@ -71,7 +71,7 @@
 
         % Lifecycle of a skip
         One additional field that is stored in every node, is a successor pointer. This pointer can be used to arrange nodes in a singly linked list and therefore to keep track of the state of a node. There are three states a node can be in, initially all nodes are in the free list. The free list contains all nodes that are currently not in use and can be considered as a pool of nodes that can be reused to store a Skip. If a Skip should be generated a node needs to be allocated, thus it is removed from the free list and the data of the Skip can be stored in this node. All generated Skips are stored in the list of Skips (LoS). The LoS always contains at least one Skip, this is also the reason why an extra reserve node needs to be allocated. When a thread needs to acquire a new Skip, it can pop the first item of the LoS. However, if the LoS only contains on item the thread needs to generate a new Skip and added to the LoS again. Figure \ref{fig:lifecycle} visualizes all three states and the transitions between these states.
-        \begin{figure}[H]
+        \begin{figure}[h]
             \includegraphics[height=2.8cm]{figure2.pdf}
             \caption{States of a node and the transitions between the states}
             \label{fig:lifecycle}
@@ -83,7 +83,7 @@
 
         % Synchronization
         Only two steps require additional synchronization, first if a new Skip needs to be acquired and second if the tuple needs to be inserted into the sample. However, both of these steps are only executed if a tuple is inserted into the sample and therefore most of the time no extra overhead is introduced. The two steps that require synchronization are highlighted in gray in figure \ref{fig:inserting}.
-        \begin{figure}[H]
+        \begin{figure}[h]
             \includegraphics[height=2.2cm]{figure3.pdf}
             \caption{Flow diagram that shows the process of deciding whether a tuple is a sample tuple or not}
             \label{fig:inserting}
@@ -96,7 +96,7 @@
         Besides the actual tuple data the sample also stores the index of the Skip that inserted the tuple. The index of a Skip is stored in its metadata and can be used to determine the order in which the Skips where generated. Every time a new Skip is generated a counter is increased and its value can be used as the index for the current Skip.
         % Overwrite protection 
         The index can be used to ensure that older tuples cannot overwrite newer tuples. Thereupon when a new tuple should be inserted into the sample the Skip index of this tuple can be compared to the index in the sample and if the index of the tuple is smaller the insert will be rejected. This mechanism is important if there is for instance a slower thread that inserts into the database and a faster one. It could be the case that the faster one already inserted multiple tuples into the sample and if the slower thread later tries to insert a tuple into a row with a newer tuple, the slower thread would overwrite progress of the faster thread. Table \ref{tab:sample} visualizes an example sample table.
-        \begin{table}[H]
+        \begin{table}[h]
             \begin{tabular}{| c | c | c | c|} 
                 \hline
                 Sample Index & Skip index & Lock & Tuple \\
@@ -123,9 +123,8 @@
         In order to determine whether a tuple is a sample tuple or not a threads needs to own a Skip. To acquire a Skip the threads needs access the LoS. However, accessing the LoS requires synchronization and if the LoS contains only one Skip the thread needs to generate a new Skip.
         
         % How does the head pointer look like
-        The free list and the LoS can be accessed using a head pointer. A pointer to a node is an index into the preallocated node are. Threads can only push a node or pop a node from a list. To ensure that no concurrent modifications can be meade to a list the head pointer is written with one atomic compare and swap operation. In order to detected changes between reading a node and make changes to the list a thread first needs to store the current pointer to a list. When the pointer changed in the meantime the compare and swap operation will fail. However, nodes are frequently added and removed to a list and it could be the case that the pointer was changed and then changed back to the original node. In this case the compare and swap operation would fail but the pointer was modified in the meantime. To address this problem the poin
-        ter also contains a version besides the index. This pointer can be stored in 64 bit integer, hereby the first 32bit store the version and the rest stores the index. Figure \ref{fig:pointer} visualizes the layout of a pointer.
-        \begin{figure}[H]
+        The free list and the LoS can be accessed using a head pointer. A pointer to a node is an index into the preallocated node are. Threads can only push a node or pop a node from a list. To ensure that no concurrent modifications can be meade to a list the head pointer is written with one atomic compare and swap operation. In order to detected changes between reading a node and make changes to the list a thread first needs to store the current pointer to a list. When the pointer changed in the meantime the compare and swap operation will fail. However, nodes are frequently added and removed to a list and it could be the case that the pointer was changed and then changed back to the original node. In this case the compare and swap operation would fail but the pointer was modified in the meantime. To address this problem the pointer also contains a version besides the index. This pointer can be stored in 64 bit integer, hereby the first 32bit store the version and the rest stores the index. Figure \ref{fig:pointer} visualizes the layout of a pointer.
+        \begin{figure}[h]
             \includegraphics[height=2.2cm]{figure4.pdf}
             \caption{The structure of a head pointer}
             \label{fig:pointer}
@@ -133,7 +132,7 @@
 
         % Actual acquiring
         The process of acquire a node from the LoS can be broken down into three steps. First the thread needs to read the head pointer and store the current value. Afterwards, the thread can use the index stored in the pointer to retrieve the node form the LoS. In the second step, the thread needs to generate the successor for the Skip stored in the node and lastly the thread tries to writes the successor into the head of the LoS. If the update succeeds the thread now owns a new Skip and the head of the LoS is set to the successor Skip. On the other hand, if the update fails, the thread needs to start over. However, in practice this is not a problem, because every time a thread fails to update the head, another thread successfully updated the head and therefore overall progress is guaranteed. Figure \ref{fig:acquire} shows the three steps necessary to acquire a Skip and the retry loop.
-        \begin{figure}[H]
+        \begin{figure}[h]
             \includegraphics[height=2.4cm]{figure5.pdf}
             \caption{Flow diagram that shows the process of acquire a Skip from the LoS}
             \label{fig:acquire}
@@ -152,7 +151,7 @@
     \section{Example}
         % Introduction to the example 
         The following example will illustrate hwo the algorithm could work with two inserting threads, $T0$ and $T1$. Figure \ref{fig:example} visualizes the state of all nodes and Skips used in this example. This example assumes that the sample as already been prefilled.
-        \begin{figure}[H]
+        \begin{figure}[h]
             \includegraphics[height=8cm]{figure6.pdf}
             \caption{The state of every Skip and node for the example}
             \label{fig:example}
@@ -165,9 +164,24 @@
 
 
     \section{Evaluation}
-        % Are all requirements met
-        % Tables from the OG
-        This is the evaluation.
+        % Recap
+        To ensure that the algorithm meets all the requirements introduced in a previous section, this section will evaluate the algorithm for every requirement. The requirements where:
+        \begin{enumerate}
+            \item Keep Samples up to date while inserting new tuples
+            \item As little overhead as possible, per thread and overall
+            \item Use constant amount of memory
+            \item Easy integration into existing solutions
+            \item Minimum amount of shared memory writes (as less locks as possible)
+        \end{enumerate}
+
+        % By design / const memory
+        (1) By design the algorithm takes every inserted tuple into consideration. Therefore, the sample is always updated. (3) Also, because all nodes are preallocated no more memory allocations are required after the algorithm is initialized and the amount of memory only scales with the maximum amount of inserting threads. Thus the memory usage is constant throughout the runtime of the algorithm. 
+
+        % Single compare and swap operation
+        (5) The algorithm reduces the amount of extra synchronization to a minimum. There are only tow cases where synchronization is required and all of the synchronization can be done with simple compare and swap (CAS) operations. CAS operations are a very efficient way to synchronization multiple threads and most of the time a single compare and swap operation is enough to acquire a new Skip. Because most of the time a thread already owns a node from the previous iteration and no additional node needs to be retrieved from the free list. In practice a CAS operation could fail if multiple threads access the same list. However, if one CAS operation fails the next one is more likely to succeed, because the successful thread needs to process the Skip first before it access the data structure again. The other case that requires synchronization is, when writing to the sample. But because the synchronization is very fine grained most of the times threads do not need to wait to acquire the write lock for the sample.
+
+        % Cheap operations
+        (2) 
 
     \bibliographystyle{ACM-Reference-Format}
     \bibliography{sources}
