@@ -175,15 +175,26 @@
         \end{enumerate}
 
         % By design / const memory
-        (1) By design the algorithm takes every inserted tuple into consideration. Therefore, the sample is always updated. (3) Also, because all nodes are preallocated no more memory allocations are required after the algorithm is initialized and the amount of memory only scales with the maximum amount of inserting threads. Thus the memory usage is constant throughout the runtime of the algorithm. 
+        (1) By design the algorithm takes every inserted tuple into consideration and decides whether the tuple is a sample tuple or not. Therefore, the sample is always updated. (3) Also, because all nodes are preallocated no more memory allocations are required after the algorithm is initialized and the amount of memory only scales with the maximum amount of inserting threads. Thus the memory usage is constant throughout the runtime of the algorithm. 
 
         % Single compare and swap operation
-        (5) The algorithm reduces the amount of extra synchronization to a minimum. There are only tow cases where synchronization is required and all of the synchronization can be done with simple compare and swap (CAS) operations. CAS operations are a very efficient way to synchronization multiple threads and most of the time a single compare and swap operation is enough to acquire a new Skip. Because most of the time a thread already owns a node from the previous iteration and no additional node needs to be retrieved from the free list. In practice a CAS operation could fail if multiple threads access the same list. However, if one CAS operation fails the next one is more likely to succeed, because the successful thread needs to process the Skip first before it access the data structure again. The other case that requires synchronization is, when writing to the sample. But because the synchronization is very fine grained most of the times threads do not need to wait to acquire the write lock for the sample.
+        (5) The algorithm reduces the amount of extra synchronization to a minimum. There are only tow cases where synchronization is required and all of the synchronization can be done with simple compare and swap (CAS) operations. CAS operations are a very efficient way to  synchronization multiple threads and most of the time a single CAS operation is enough to acquire a new Skip. Because it is likely that a thread already owns a node from the previous iteration and no additional node needs to be retrieved from the free list. In practice a CAS operation could fail if multiple threads access the same list. However, if one CAS operation fails the next one is more likely to succeed, because the successful thread needs to process the Skip first before it access the data structure again. The other case that requires synchronization is, when writing to the sample. But because the synchronization is very fine grained most of the time threads do not need to wait to acquire the write lock for the sample.
 
         % Cheap operations
-        (2) 
+        (2) Most of the additional overhead introduced by the algorithm, is acquiring a Skip. When a thread already owns a Skip, only one additional decrement and compare operation needs to be execute. Because most of the time a thread will own a Skip, the introduced overhead is very low. This sampling algorithm was also integrated into the DBMS Umbra\cite{Umbra} and figure \ref{fig:performance} visualizes the throughout with and without sampling. Most of the time the performance is exactly the same, only in some cases the throughout with sampling off is slightly higher. This confirms the claim that online sampling introduced virtually no overhead.
+        \begin{figure}[h]
+            \includegraphics[height=4.6cm]{figure7.pdf}
+            \caption{TPC-H bulk-loading throughput in Umbra\cite{Umbra} with
+            and without sampling \cite[figure 6]{OG}}
+            \label{fig:performance}
+        \end{figure}
+
+        % Simple interface
+        (4) Integrating this sampling algorithm into an existing DBMS can be done with a simple interface. To initialize the algorithm only the node array needs to be allocated and the pointer the free list and the LoS needs to be created. Acquiring a Skip can be done with one simple function call that handles everything, like accessing the LoS and allocating or deallocating nodes. Also, deciding whether a tuple is a sample tuple or not and inserting this tuple into the sample can be done with one simple function call. In total the interface of the algorithm consist only of a few simple function calls that need be from the existing code.
+
+    \section{Conclusion}
+        Online sampling is highly performant and scalable alternative to traditional sampling algorithm. A theoretical analysis and a practical analysis show that the algorithm can create and maintain a sample in memory with virtually no overhead.
 
     \bibliographystyle{ACM-Reference-Format}
     \bibliography{sources}
-
 \end{document}
