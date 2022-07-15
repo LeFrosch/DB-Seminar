@@ -12,9 +12,9 @@
     \email{daniel.brauner@tum.de}
     
     \begin{abstract}
-        One of the most important assets for the query optimizer in modern Database Management Systems is a random subset of the data. This subset needs to be derived from the data which is stored in the tables. Traditionally, generating such a sample was very expensive owing to the random access pattern. Also if the sample is generated periodically it can become stale overtime. Therefore, it would be way more performant to generate and maintain the sample while the entries are written to the database.
+        One of the most important assets for the query optimizer in modern Database Management Systems is a random subset of the data. This subset needs to be derived from the data which is stored in a table. Traditionally, generating such a sample was very expensive owing to the random access pattern. Also, if the sample is generated periodically it can become stale overtime. Therefore, it would be way more performant to generate and maintain the sample in memory while the entries are written to the database.
 
-        The paper Concurrent online sampling, for all, for free by Altan Birler, Bernhard Radke, and Thomas Neumann \cite{OG} introduces a new algorithm that maintains a random sample in memory with minimal overhead. Additional the algorithm requires no more random, because every tuple is take into consideration when it is first inserted.
+        The paper Concurrent online sampling, for all, for free by Altan Birler, Bernhard Radke, and Thomas Neumann \cite{OG} introduces a new algorithm that maintains a random sample in memory with minimal overhead. Additional the algorithm requires no more random, because every tuple is take into consideration when it is first inserted. Additionally, because every tuple is taken into consideration when it is inserted the sample never becomes stale over time.
     \end{abstract}
 
     % From the OG
@@ -24,37 +24,36 @@
 
     \section{Introduction}
         % What is sampling
-        A random subset of data is called a sample, usually the sample is much smaller then the actual data. In the context of Database Management Systems (DBMS) a sample is a smaller table that contains a copy of random rows from another table. The process of creating and maintaining a sample is called sampling. Maintaining hereby refers to keeping the sample up to date when the underlying data changes.
+        A random subset of data is called a sample, usually the sample is much smaller then the actual data. In the context of Database Management Systems (DBMS) a sample is a smaller table that contains a copy of random rows from another table. The process of creating and maintaining a sample is called sampling. Maintaining hereby refers to keeping the sample up to date when the underlying data changes. For instance a delete request could remove a row that was also part of the sample.
     
         % Why is sampling necessary
         Such a sample can be used by the query optimizer in modern DBMS. For instance the data stored in the sample can be used to predict the size of intermediate results when joining multiple tables. This is very important when the query optimizer tries to determine the order in which the joins should be executed. Also, the sample can be used to predict the result of aggregate queries, like SUM, COUNT, etc. 
 
-
     \section{Motivation} 
         % Current sampling algorithms
-        The most naive way to provide a sample to the optimizer, would be generating it on demand. But generating a sample is not cheap, specially when the data is stored on disk. Because to create a random sample, random rows need to be read resulting in random I/O. Therefore, in some cases generating the sample can take more time then the actual query to execute.
+        The most naive way to provide a sample to the optimizer, would be generating it on demand. But generating a sample is not cheap, specially when the data is stored on disk. Because to create a random sample, random rows need to be read resulting in random I/O. Reading in a random access pattern from a disk can be very slow. Therefore, in some cases generating the sample can take more time then the actual query to execute.
 
         Some modern DBMS address this problem by only generating the sample periodically. Generating the sample still requires random I/O but the cost can be amortized over multiple queries. However, this introduces a new issues, the sample can become stale over time. Hence, predictions based on the sample can be wrong and are no longer useful for the query optimizer.
 
     \section{Solution}
         % What is online sampling
-        A solution to this problem is present in a paper by Altan Birler, Bernhard Radke, and Thomas Neumann \cite{OG}. Their online sampling algorithm address all these issues. The main idea behind online sampling is to create and maintain the sample when inserting new tuples into the database. Because every tuple that is going to be inserted is taken into consideration by the algorithm the sample is always up to date. Furthermore, no random I/O is required because no rows need to be retrieved from the disk. This approach can also be extended to support updates and deletes, but handling these operations is a little bit more involved. Modern DBMS use multiple threads for inserting and sometimes also allocate and deallocate threads on demand. Therefore, the algorithm also needs to support multithreading with a varying amount of threads.
+        A solution to this problem is present in a paper by Altan Birler, Bernhard Radke, and Thomas Neumann \cite{OG}. Their online sampling algorithm address all these issues. The main idea behind online sampling is to create and maintain the sample while inserting new tuples into the database. Herby the algorithm decides for every tuple before inserting it into a table, whether this tuple should also be added to sample or not. Because every tuple that is going to be inserted is taken into consideration by the algorithm the sample is always up to date. Furthermore, no random I/O is required because no rows need to be retrieved from disk. This approach can also be extended to support updates and deletes, but handling these operations is a little bit more involved. Modern DBMS use multiple threads for inserting and sometimes also allocate and deallocate threads on demand. Therefore, the algorithm also needs to support multithreading with a varying amount of threads.
         % Requirements
-        To summarize the goal of online sampling is to produce a sample of size $m$ from a data set of an unknown size $n$ with $m<n$. Additional the algorithm should meet the following requirements:
+        To summarize, the goal of online sampling is to produce a sample of size $m$ from a data set of an unknown size $n$ with $m<n$. Additional the algorithm should meet the following requirements:
         \begin{enumerate}
             \item Keep Samples up to date while inserting new tuples
             \item As little overhead as possible, per thread and overall
-            \item Use constant amount of memory
+            \item Use a constant amount of memory
             \item Easy integration into existing solutions
             \item Minimum amount of shared memory writes (as less locks as possible)
         \end{enumerate}
         
         % Phases
-        The algorithm can be broken down into three phases, in the first one all required data structures are created and initialized. Initially the sample is empty and phase two preloads the sample. Thus, all first $m$ tuples are inserted in order into the sample. During phase the where the actual sampling takes place, the algorithm assumes that the sample is full.
+        The algorithm can be broken down into three phases, in the first one all required data structures are created and initialized. Initially the sample is empty and phase two preloads the sample. Thus, all first $m$ tuples are inserted in order into the sample. During phase three the actual sampling takes place. In this phase the algorithm assumes that the sample is always full and replaces a tuple in the sample if a new one should be inserted.
         
     \subsection{Skips}
         % The idea behind skip length
-        To build a random sample the algorithm needs to decide probabilistically for every inserted tuple whether the tuple is a part of the sample or not. Tuples which are inserted into the sample are called sample tuples and tuple which are not inserted are "skipped". But deciding for every tuple separately whether it is a sample tuple or not can be rather expensive. However, the amount of tuples that are skipped between two consecutive sample tuples follows a geometric distribution. Therefore, to avoid running a calculation for every inserted tuple, the length between to sample tuples can be generated randomly. This length is refereed to as the Skip length and can be used to calculate the next sample tuple. Every time a new tuple should be inserted the length can be decremented by one. If the length is equal to zero after decrementing it the current tuple is a sample tuple, otherwise it will be skipped. Once the length has reached zero a new length needs to be generated. Figure \ref{fig:skips} shows an example of two Skips, 
+        To build a random sample the algorithm needs to decide probabilistically for every inserted tuple whether the tuple is a part of the sample or not. Tuples which are inserted into the sample are called sample tuples and tuple which are not inserted are "skipped". But deciding for every tuple separately whether it is a sample tuple or not can be rather expensive. However, the amount of tuples that are skipped between two consecutive sample tuples follows a geometric distribution. Therefore, to avoid running a calculation for every inserted tuple, the length between to sample tuples can be generated randomly. This length is refereed to as the Skip length and can be used to calculate the next sample tuple. Every time a new tuple is inserted the length is decremented by one. If the length is equal to zero after decrementing it the current tuple is a sample tuple, otherwise it will be skipped. Once the length has reached zero a new length needs to be generated. Figure \ref{fig:skips} shows an example of two Skips, 
         the white tuples are skipped and the gray tuples are sample tuples.
         \begin{figure}[h]
             \centering
@@ -64,13 +63,13 @@
         \end{figure}
 
         % Preallocation
-        The length of a Skip is stored with some additional metadata in node. To ensure the constant use of memory it is necessary that the maximum amount of threads that can be used for inserting is known when the algorithm is initialized. In consequence, all nodes can be preallocated, one for every thread and one additional node as reserve. On benefit is that no more memory allocation is required at run time and that a pointer to a node can simply be an index into the node array.
+        The length of a Skip is stored with some additional metadata in node. To ensure the constant use of memory it is necessary that the maximum amount of threads that can be used for inserting is known when the algorithm is initialized. In consequence, all nodes can be preallocated, one for every thread and one additional node as reserve. On benefit is that no more memory allocation are required at run time and that a pointer to a node can simply be an index into the node array.
 
         % Multithreaded nodes
-        Hence, Skips are already stored in self contained nodes, these nodes can easily be distributed among multiple threads. Once a thread has received a Skip, the thread can process tuples independently and can use its own Skip to determine which tuples to add to the sample. After the thread has reached a sample tuple and the length of the Skip has reached zero the thread needs to acquire a new Skip. Only the generation and distribution of Skips needs to be synchronized.
+        Hence, Skips are already stored in self contained nodes, these nodes can easily be distributed among multiple threads. Once a thread has received a Skip, the thread can process tuples independently and can use its own Skip to determine which tuples to add to the sample. After the thread has reached a sample tuple and the length of the Skip has reached zero the thread needs to acquire a new Skip. Only the generation and distribution of Skips need to be synchronized.
 
         % Lifecycle of a skip
-        One additional field that is stored in every node, is a successor pointer. This pointer can be used to arrange nodes in a singly linked list and therefore to keep track of the state of a node. There are three states a node can be in, initially all nodes are in the free list. The free list contains all nodes that are currently not in use and can be considered as a pool of nodes that can be reused to store a Skip. If a Skip should be generated a node needs to be allocated, thus it is removed from the free list and the data of the Skip can be stored in this node. All generated Skips are stored in the list of Skips (LoS). The LoS always contains at least one Skip, this is also the reason why an extra reserve node needs to be allocated. When a thread needs to acquire a new Skip, it can pop the first item of the LoS. However, if the LoS only contains on item the thread needs to generate a new Skip and added to the LoS again. Figure \ref{fig:lifecycle} visualizes all three states and the transitions between these states.
+        One additional field that is stored in every node, is a successor pointer. This pointer can be used to arrange nodes in a singly linked list and therefore to keep track of the state of a node. There are three states a node can be in, initially all nodes are in the free list. The free list contains all nodes that are currently not in use and the list can be considered as a pool of nodes that can be reused. If a Skip should be generated a node needs to be allocated, thus it is removed from the free list. Then the data of the Skip can be stored in this node. All generated Skips are stored in the list of Skips (LoS). The LoS always contains at least one Skip, this is also the reason why an extra reserve node needs to be allocated. When a thread needs to acquire a new Skip, it can pop the first item of the LoS. However, if the LoS only contains on item the thread needs to generate a new Skip and added to the LoS again. Figure \ref{fig:lifecycle} visualizes all three states and the transitions between these states.
         \begin{figure}[h]
             \includegraphics[height=2.8cm]{figure2.pdf}
             \caption{States of a node and the transitions between the states}
@@ -95,7 +94,7 @@
         % Skip index
         Besides the actual tuple data the sample also stores the index of the Skip that inserted the tuple. The index of a Skip is stored in its metadata and can be used to determine the order in which the Skips where generated. Every time a new Skip is generated a counter is increased and its value can be used as the index for the current Skip.
         % Overwrite protection 
-        The index can be used to ensure that older tuples cannot overwrite newer tuples. Thereupon when a new tuple should be inserted into the sample the Skip index of this tuple can be compared to the index in the sample and if the index of the tuple is smaller the insert will be rejected. This mechanism is important if there is for instance a slower thread that inserts into the database and a faster one. It could be the case that the faster one already inserted multiple tuples into the sample and if the slower thread later tries to insert a tuple into a row with a newer tuple, the slower thread would overwrite progress of the faster thread. Table \ref{tab:sample} visualizes an example sample table.
+        The index stored in the sample can be used to ensure that older tuples cannot overwrite newer tuples. Thereupon when a new tuple should be inserted into the sample the Skip index of this tuple can be compared to the index in the sample and if the index of the tuple is smaller the insert will be rejected. This mechanism is important if there is for instance a slower thread that inserts into the database and a faster one. It could be the case that the faster thread already inserted multiple tuples into the sample and if the slower thread later tries to insert a tuple into a row with a newer tuple, the slower thread would overwrite progress made by the faster thread. Table \ref{tab:sample} visualizes an example sample table.
         \begin{table}[h]
             \begin{tabular}{| c | c | c | c|} 
                 \hline
@@ -122,8 +121,8 @@
         % Recap
         In order to determine whether a tuple is a sample tuple or not a threads needs to own a Skip. To acquire a Skip the threads needs access the LoS. However, accessing the LoS requires synchronization and if the LoS contains only one Skip the thread needs to generate a new Skip.
         
-        % How does the head pointer look like
-        The free list and the LoS can be accessed using a head pointer. A pointer to a node is an index into the preallocated node are. Threads can only push a node or pop a node from a list. To ensure that no concurrent modifications can be meade to a list the head pointer is written with one atomic compare and swap operation. In order to detected changes between reading a node and make changes to the list a thread first needs to store the current pointer to a list. When the pointer changed in the meantime the compare and swap operation will fail. However, nodes are frequently added and removed to a list and it could be the case that the pointer was changed and then changed back to the original node. In this case the compare and swap operation would fail but the pointer was modified in the meantime. To address this problem the pointer also contains a version besides the index. This pointer can be stored in 64 bit integer, hereby the first 32bit store the version and the rest stores the index. Figure \ref{fig:pointer} visualizes the layout of a pointer.
+        % How does the head pointer look like (LOOOK A THIS)
+        The free list and the LoS can be accessed using a head pointer. A pointer to a node is an index into the preallocated node are. Threads can only push a node or pop a node from a list. To ensure that no concurrent modifications can be meade to a list the head pointer is written with one atomic compare and swap operation. In order to detected changes made by other threads, a thread first needs to store the current pointer to a list. When the pointer changed in the meantime the compare and swap operation will fail. However, nodes are frequently added and removed to a list and it could be the case that the pointer was changed and then changed back to the original node. In this case the compare and swap operation would fail but the pointer was modified in the meantime. To address this problem the pointer also contains a version besides the index. This pointer can be stored in 64 bit integer, hereby the first 32bit store the version and the rest stores the index. Figure \ref{fig:pointer} visualizes the layout of a pointer.
         \begin{figure}[h]
             \includegraphics[height=2.2cm]{figure4.pdf}
             \caption{The structure of a head pointer}
@@ -169,7 +168,7 @@
         \begin{enumerate}
             \item Keep Samples up to date while inserting new tuples
             \item As little overhead as possible, per thread and overall
-            \item Use constant amount of memory
+            \item Use a constant amount of memory
             \item Easy integration into existing solutions
             \item Minimum amount of shared memory writes (as less locks as possible)
         \end{enumerate}
@@ -193,7 +192,7 @@
         (4) Integrating this sampling algorithm into an existing DBMS can be done with a simple interface. To initialize the algorithm only the node array needs to be allocated and the pointer the free list and the LoS needs to be created. Acquiring a Skip can be done with one simple function call that handles everything, like accessing the LoS and allocating or deallocating nodes. Also, deciding whether a tuple is a sample tuple or not and inserting this tuple into the sample can be done with one simple function call. In total the interface of the algorithm consist only of a few simple function calls that need be from the existing code.
 
     \section{Conclusion}
-        Online sampling is highly performant and scalable alternative to traditional sampling algorithm. A theoretical analysis and a practical analysis show that the algorithm can create and maintain a sample in memory with virtually no overhead.
+        Online sampling is a highly performant and scalable alternative to traditional sampling algorithm. A theoretical analysis and a practical analysis show that the algorithm can create and maintain a sample in memory with virtually no overhead. Thereby the algorithm solves a lot of shortcomings of traditional approaches. For example no more random reads from disk are required and the sample never becomes stale.
 
     \bibliographystyle{ACM-Reference-Format}
     \bibliography{sources}
