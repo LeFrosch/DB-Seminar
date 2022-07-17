@@ -88,10 +88,13 @@ void parse_args(struct args* args, int argc, char** argv) {
     argp_parse(&argp, argc, argv, 0, 0, args);
 
     if (args->verbose) {
-        printf("Reservoir size: %zu\n"
-               "Insertions per thread: %zu\n"
+#ifndef NO_SAMPLE
+        printf("Reservoir size: %zu\n", args->reservoir_size);
+#endif
+
+        printf("Insertions per thread: %zu\n"
                "Thread count: %zu\n\n",
-               args->reservoir_size, args->insertions, args->threads
+               args->insertions, args->threads
         );
     }
 }

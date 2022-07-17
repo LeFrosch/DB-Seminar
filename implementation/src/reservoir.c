@@ -33,8 +33,10 @@ void insert_into_reservoir_preload(struct reservoir* reservoir, void* data, size
 
     LOCK(&tuple->lock);
 
-    assert(tuple->data == NULL);
-
+    if (tuple->data != NULL) {
+        goto end;
+    }
+    
     void* data_copy = malloc(data_size);
     if (!data_copy) {
         goto end;
